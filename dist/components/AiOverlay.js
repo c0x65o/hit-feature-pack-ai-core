@@ -1,5 +1,30 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+function summarizeHttpResult(input, data) {
+    const method = String(input?.method ?? data?.method ?? '').toUpperCase();
+    const path = String(input?.path ?? '');
+    const status = data?.status;
+    const resp = data?.response ?? data;
+    if (method === 'POST' && path.includes('/api/crm/companies') && status === 201) {
+        const name = resp?.name || input?.body?.name;
+        const id = resp?.id;
+        return `✅ Created company${name ? ` **${name}**` : ''}.${id ? ` (id: ${id})` : ''}`;
+    }
+    if (method === 'GET' && (path.includes('/api/crm/companies') || path.includes('/api/crm/contacts'))) {
+        const items = resp?.items;
+        if (Array.isArray(items)) {
+            const kind = path.includes('/api/crm/contacts') ? 'contact' : 'company';
+            const topNames = items
+                .slice(0, 5)
+                .map((it) => it?.name)
+                .filter(Boolean)
+                .join(', ');
+            return `✅ Found **${items.length}** ${kind}${items.length === 1 ? '' : 's'}${topNames ? `: ${topNames}` : ''}`;
+        }
+    }
+    const safeStatus = typeof status === 'number' ? status : undefined;
+    return `✅ Request completed${safeStatus ? ` (status: ${safeStatus})` : ''}.`;
+}
 function getStoredToken() {
     if (typeof document !== 'undefined') {
         const cookies = document.cookie.split(';');
@@ -86,6 +111,7 @@ export function AiOverlay(props) {
         user: props.user,
         hitConfig: typeof window !== 'undefined' ? window.__HIT_CONFIG : null,
         tools: tools ? tools.map((t) => ({ name: t.name, description: t.description, readOnly: t.readOnly })) : null,
+        origin: typeof window !== 'undefined' ? window.location.origin : null,
     }), [props.packName, props.pathname, props.routeId, props.user, tools]);
     const defaultToolInput = useCallback((toolName) => {
         if (toolInputs[toolName])
@@ -154,7 +180,7 @@ export function AiOverlay(props) {
                 ...prev,
                 {
                     role: 'assistant',
-                    content: `✅ Ran tool: ${toolName}\n\nResult:\n${JSON.stringify(data, null, 2)}`,
+                    content: toolName === 'http.request' ? summarizeHttpResult(input, data) : `✅ Done.`,
                 },
             ]);
         }
@@ -180,6 +206,37 @@ export function AiOverlay(props) {
         const nextMessages = [...messages, { role: 'user', content: text }];
         setMessages(nextMessages);
         try {
+            // Try agent loop first (Codex-style multi-step). If it doesn't handle, fall back to chat.
+            try {
+                const token = getStoredToken();
+                const agentRes = await fetch('/api/proxy/ai/hit/ai/agent', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({
+                        message: text,
+                        context,
+                    }),
+                });
+                const agentData = await agentRes.json().catch(() => null);
+                if (agentRes.ok && agentData?.handled) {
+                    if (agentData?.pending_approval?.toolName && agentData?.pending_approval?.input) {
+                        setPendingApproval({
+                            toolName: agentData.pending_approval.toolName,
+                            input: agentData.pending_approval.input,
+                        });
+                    }
+                    const finalMsg = agentData?.final_message || 'Done.';
+                    setMessages((prev) => [...prev, { role: 'assistant', content: finalMsg }]);
+                    setLoading(false);
+                    return;
+                }
+            }
+            catch {
+                // ignore and fall back to chat
+            }
             // Tiny heuristic: "add a company named X" -> prefill dynamic http.request draft.
             // This is just to prove the approval UX; later the planner model will do this.
             const addCompanyMatch = text.match(/\badd\s+(?:a\s+)?company\s+(?:named\s+)?(.+?)\s*$/i) ||
@@ -198,6 +255,17 @@ export function AiOverlay(props) {
                 }));
                 // Ensure we select http.request if available.
                 setSelectedTool('http.request');
+                // End-user friendly: auto-run the action and skip generic chat response.
+                await runTool('http.request', {
+                    method: 'POST',
+                    path: '/api/crm/companies',
+                    query: {},
+                    body: { name },
+                    approved: true,
+                });
+                setSuggested(null);
+                setLoading(false);
+                return;
             }
             // Step 1: dynamic tool search (small candidates list) for staging UI.
             try {
@@ -457,7 +525,7 @@ export function AiOverlay(props) {
                                                                     fontSize: 12,
                                                                     boxSizing: 'border-box',
                                                                 } }), isWriteHttp && (_jsx("div", { style: { fontSize: 12, color: 'var(--hit-muted-foreground, #64748b)' }, children: "Write methods will create an approval draft before executing." }))] }))] }, toolName));
-                                        }) }), _jsx("div", { style: { fontSize: 12, marginTop: 8, color: 'var(--hit-muted-foreground, #64748b)' }, children: "Note: write actions are staged next (draft \u2192 approve \u2192 apply)." })] })), pendingApproval && (_jsxs("div", { style: {
+                                        }) }), _jsx("div", { style: { fontSize: 12, marginTop: 8, color: 'var(--hit-muted-foreground, #64748b)' }, children: "Tip: ask naturally \u2014 I\u2019ll run safe actions automatically." })] })), pendingApproval && (_jsxs("div", { style: {
                                     border: '1px solid rgba(245, 158, 11, 0.5)',
                                     borderRadius: 12,
                                     padding: 10,
