@@ -39,6 +39,38 @@ function getStoredToken() {
     }
     return null;
 }
+function getChatStorageKey(opts) {
+    const email = (opts.userEmail || 'anon').toLowerCase();
+    // Keep it stable across refresh; scope per app user + pathname.
+    const path = (opts.pathname || '/').split('?')[0].split('#')[0];
+    return `hit_ai_assistant_chat_v1:${email}:${path}`;
+}
+function loadChatState(key) {
+    try {
+        if (typeof window === 'undefined')
+            return null;
+        const raw = window.localStorage.getItem(key);
+        if (!raw)
+            return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object')
+            return null;
+        return parsed;
+    }
+    catch {
+        return null;
+    }
+}
+function saveChatState(key, state) {
+    try {
+        if (typeof window === 'undefined')
+            return;
+        window.localStorage.setItem(key, JSON.stringify(state));
+    }
+    catch {
+        // ignore
+    }
+}
 export function AiOverlay(props) {
     const [open, setOpen] = useState(false);
     const [input, setInput] = useState('');
@@ -50,12 +82,37 @@ export function AiOverlay(props) {
     const [runningTool, setRunningTool] = useState(null);
     const [lastUserQuery, setLastUserQuery] = useState('');
     const [pendingApproval, setPendingApproval] = useState(null);
-    const [messages, setMessages] = useState(() => [
+    const initialMessages = useMemo(() => [
         {
             role: 'assistant',
-            content: 'Hi — I\'m the HIT assistant. Ask me what this page does, where to find something, or describe what you want to do and I\'ll guide you.',
+            content: "Hi — I'm the HIT assistant. Ask me what this page does, where to find something, or describe what you want to do and I'll guide you.",
         },
-    ]);
+    ], []);
+    const chatStorageKey = useMemo(() => getChatStorageKey({ pathname: props.pathname, userEmail: props.user?.email ?? null }), [props.pathname, props.user?.email]);
+    const [messages, setMessages] = useState(() => {
+        const saved = loadChatState(chatStorageKey);
+        if (saved?.messages && Array.isArray(saved.messages) && saved.messages.length > 0) {
+            return saved.messages;
+        }
+        return initialMessages;
+    });
+    // Load saved input on mount/key change
+    useEffect(() => {
+        const saved = loadChatState(chatStorageKey);
+        if (saved?.input && typeof saved.input === 'string') {
+            setInput(saved.input);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [chatStorageKey]);
+    // Persist messages + draft input (survives refresh) until user clicks "New"
+    useEffect(() => {
+        // Avoid writing gigantic payloads endlessly; keep last ~50 messages.
+        const trimmed = messages.slice(-50);
+        const t = window.setTimeout(() => {
+            saveChatState(chatStorageKey, { messages: trimmed, input });
+        }, 150);
+        return () => window.clearTimeout(t);
+    }, [chatStorageKey, input, messages]);
     const bottomRef = useRef(null);
     useEffect(() => {
         if (!open)
@@ -377,14 +434,36 @@ export function AiOverlay(props) {
                             justifyContent: 'space-between',
                             padding: '12px 12px',
                             borderBottom: '1px solid var(--hit-border, rgba(255,255,255,0.12))',
-                        }, children: [_jsxs("div", { style: { display: 'flex', flexDirection: 'column', gap: 2 }, children: [_jsx("div", { style: { fontWeight: 700 }, children: "AI Assistant" }), _jsx("div", { style: { fontSize: 12, color: 'var(--hit-muted-foreground, rgba(255,255,255,0.65))' }, children: props.pathname || '' })] }), _jsx("button", { onClick: () => setOpen(false), style: {
-                                    border: 'none',
-                                    background: 'transparent',
-                                    color: 'inherit',
-                                    cursor: 'pointer',
-                                    fontSize: 18,
-                                    lineHeight: '18px',
-                                }, "aria-label": "Close", children: "\u00D7" })] }), _jsxs("div", { style: { flex: 1, padding: 12, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }, children: [messages.map((m, idx) => (_jsx("div", { style: {
+                        }, children: [_jsxs("div", { style: { display: 'flex', flexDirection: 'column', gap: 2 }, children: [_jsx("div", { style: { fontWeight: 700 }, children: "AI Assistant" }), _jsx("div", { style: { fontSize: 12, color: 'var(--hit-muted-foreground, rgba(255,255,255,0.65))' }, children: props.pathname || '' })] }), _jsxs("div", { style: { display: 'flex', alignItems: 'center', gap: 8 }, children: [_jsx("button", { onClick: () => {
+                                            try {
+                                                if (typeof window !== 'undefined')
+                                                    window.localStorage.removeItem(chatStorageKey);
+                                            }
+                                            catch { }
+                                            setPendingApproval(null);
+                                            setSuggested(null);
+                                            setSelectedTool(null);
+                                            setToolInputs({});
+                                            setLastUserQuery('');
+                                            setInput('');
+                                            setMessages(initialMessages);
+                                        }, style: {
+                                            borderRadius: 10,
+                                            border: '1px solid var(--hit-border, rgba(255,255,255,0.25))',
+                                            background: 'transparent',
+                                            color: 'inherit',
+                                            cursor: 'pointer',
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            padding: '6px 10px',
+                                        }, "aria-label": "New chat", title: "Clear chat (keeps until you click this)", children: "New" }), _jsx("button", { onClick: () => setOpen(false), style: {
+                                            border: 'none',
+                                            background: 'transparent',
+                                            color: 'inherit',
+                                            cursor: 'pointer',
+                                            fontSize: 18,
+                                            lineHeight: '18px',
+                                        }, "aria-label": "Close", children: "\u00D7" })] })] }), _jsxs("div", { style: { flex: 1, padding: 12, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }, children: [messages.map((m, idx) => (_jsx("div", { style: {
                                     alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
                                     maxWidth: '85%',
                                     padding: '10px 10px',

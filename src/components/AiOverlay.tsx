@@ -79,6 +79,35 @@ function getStoredToken(): string | null {
   return null;
 }
 
+function getChatStorageKey(opts: { pathname?: string; userEmail?: string | null }): string {
+  const email = (opts.userEmail || 'anon').toLowerCase();
+  // Keep it stable across refresh; scope per app user + pathname.
+  const path = (opts.pathname || '/').split('?')[0].split('#')[0];
+  return `hit_ai_assistant_chat_v1:${email}:${path}`;
+}
+
+function loadChatState(key: string): { messages?: ChatMessage[]; input?: string } | null {
+  try {
+    if (typeof window === 'undefined') return null;
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed as any;
+  } catch {
+    return null;
+  }
+}
+
+function saveChatState(key: string, state: { messages: ChatMessage[]; input: string }) {
+  try {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(key, JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+}
+
 export function AiOverlay(props: {
   routeId?: string;
   packName?: string;
@@ -95,13 +124,48 @@ export function AiOverlay(props: {
   const [runningTool, setRunningTool] = useState<string | null>(null);
   const [lastUserQuery, setLastUserQuery] = useState<string>('');
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>(() => [
-    {
-      role: 'assistant',
-      content:
-        'Hi — I\'m the HIT assistant. Ask me what this page does, where to find something, or describe what you want to do and I\'ll guide you.',
-    },
-  ]);
+  const initialMessages: ChatMessage[] = useMemo(
+    () => [
+      {
+        role: 'assistant',
+        content:
+          "Hi — I'm the HIT assistant. Ask me what this page does, where to find something, or describe what you want to do and I'll guide you.",
+      },
+    ],
+    []
+  );
+
+  const chatStorageKey = useMemo(
+    () => getChatStorageKey({ pathname: props.pathname, userEmail: props.user?.email ?? null }),
+    [props.pathname, props.user?.email]
+  );
+
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const saved = loadChatState(chatStorageKey);
+    if (saved?.messages && Array.isArray(saved.messages) && saved.messages.length > 0) {
+      return saved.messages as ChatMessage[];
+    }
+    return initialMessages;
+  });
+
+  // Load saved input on mount/key change
+  useEffect(() => {
+    const saved = loadChatState(chatStorageKey);
+    if (saved?.input && typeof saved.input === 'string') {
+      setInput(saved.input);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatStorageKey]);
+
+  // Persist messages + draft input (survives refresh) until user clicks "New"
+  useEffect(() => {
+    // Avoid writing gigantic payloads endlessly; keep last ~50 messages.
+    const trimmed = messages.slice(-50);
+    const t = window.setTimeout(() => {
+      saveChatState(chatStorageKey, { messages: trimmed, input });
+    }, 150);
+    return () => window.clearTimeout(t);
+  }, [chatStorageKey, input, messages]);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -470,20 +534,50 @@ export function AiOverlay(props: {
                 {props.pathname || ''}
               </div>
             </div>
-            <button
-              onClick={() => setOpen(false)}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                color: 'inherit',
-                cursor: 'pointer',
-                fontSize: 18,
-                lineHeight: '18px',
-              }}
-              aria-label="Close"
-            >
-              ×
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                onClick={() => {
+                  try {
+                    if (typeof window !== 'undefined') window.localStorage.removeItem(chatStorageKey);
+                  } catch {}
+                  setPendingApproval(null);
+                  setSuggested(null);
+                  setSelectedTool(null);
+                  setToolInputs({});
+                  setLastUserQuery('');
+                  setInput('');
+                  setMessages(initialMessages);
+                }}
+                style={{
+                  borderRadius: 10,
+                  border: '1px solid var(--hit-border, rgba(255,255,255,0.25))',
+                  background: 'transparent',
+                  color: 'inherit',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  padding: '6px 10px',
+                }}
+                aria-label="New chat"
+                title="Clear chat (keeps until you click this)"
+              >
+                New
+              </button>
+              <button
+                onClick={() => setOpen(false)}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'inherit',
+                  cursor: 'pointer',
+                  fontSize: 18,
+                  lineHeight: '18px',
+                }}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
           </div>
 
           <div style={{ flex: 1, padding: 12, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
