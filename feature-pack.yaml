@@ -1,0 +1,32 @@
+# Feature Pack: ai-assistant
+# Global AI assistant overlay that can be mounted once at the shell level.
+
+name: ai-assistant
+version: 1.0.0
+description: Global AI assistant overlay for HIT apps (shell-level)
+
+# A tiny hidden route exists purely as an install signal (so the app shell can
+# detect this pack is enabled via .hit/generated/routes.ts) without relying on
+# hit-config having a feature_packs list.
+routes:
+  - path: /__ai
+    page: AiDebug
+    roles: []
+
+# No nav contributions (overlay is global, not a sidebar item)
+nav: []
+
+requires:
+  modules:
+    - ai
+
+config:
+  schema:
+    enabled:
+      type: boolean
+      default: true
+      description: Enable the AI overlay
+    model:
+      type: string
+      default: gpt-4o-mini
+      description: Default model for chat

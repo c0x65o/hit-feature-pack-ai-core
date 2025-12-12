@@ -1,0 +1,49 @@
+{
+  "name": "@hit/feature-pack-ai-assistant",
+  "version": "1.0.0",
+  "description": "Global AI assistant overlay for HIT apps (shell-level).",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./pages/*": {
+      "types": "./dist/pages/*.d.ts",
+      "import": "./dist/pages/*.js",
+      "require": "./dist/pages/*.js",
+      "default": "./dist/pages/*.js"
+    },
+    "./components/*": {
+      "types": "./dist/components/*.d.ts",
+      "import": "./dist/components/*.js",
+      "require": "./dist/components/*.js",
+      "default": "./dist/components/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "feature-pack.yaml"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "@hit/ui-kit": "*",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@hit/ui-kit": "file:../hit-ui-kit",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "typescript": "^5.0.0"
+  },
+  "license": "MIT"
+}
