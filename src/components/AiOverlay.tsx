@@ -145,6 +145,7 @@ export function AiOverlay(props: {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (!e.key) return;
       const isK = e.key.toLowerCase() === 'k';
       if ((e.metaKey || e.ctrlKey) && isK) {
         e.preventDefault();

@@ -108,6 +108,8 @@ export function AiOverlay(props) {
     }, [open, messages.length, pendingApproval]);
     useEffect(() => {
         const onKeyDown = (e) => {
+            if (!e.key)
+                return;
             const isK = e.key.toLowerCase() === 'k';
             if ((e.metaKey || e.ctrlKey) && isK) {
                 e.preventDefault();
