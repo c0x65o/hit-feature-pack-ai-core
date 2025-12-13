@@ -6,5 +6,5 @@ export declare function AiOverlay(props: {
         email?: string;
         roles?: string[];
     } | null;
-}): import("react/jsx-runtime").JSX.Element;
+}): import("react/jsx-runtime").JSX.Element | null;
 //# sourceMappingURL=AiOverlay.d.ts.map

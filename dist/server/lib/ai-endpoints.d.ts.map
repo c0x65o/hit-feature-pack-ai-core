@@ -1,0 +1,1 @@
+{"version":3,"file":"ai-endpoints.d.ts","sourceRoot":"","sources":["../../../src/server/lib/ai-endpoints.ts"],"names":[],"mappings":"AAGA,MAAM,MAAM,kBAAkB,GAAG;IAC/B,YAAY,EAAE,MAAM,CAAC;IACrB,OAAO,EAAE,MAAM,EAAE,CAAC;IAClB,OAAO,CAAC,EAAE,MAAM,CAAC;IACjB,UAAU,CAAC,EAAE,MAAM,CAAC,MAAM,EAAE,MAAM,CAAC,CAAC;CACrC,CAAC;AA8DF,wBAAgB,uBAAuB,CAAC,WAAW,EAAE,MAAM,GAAG,kBAAkB,EAAE,CA+BjF"}

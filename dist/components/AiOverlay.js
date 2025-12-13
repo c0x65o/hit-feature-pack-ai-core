@@ -1,3 +1,5 @@
+"use client";
+'use client';
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 function summarizeHttpResult(input, data) {
@@ -69,11 +71,37 @@ function saveChatState(key, state) {
     }
 }
 export function AiOverlay(props) {
+    // The AI overlay is a shell-level component, but it should only appear for
+    // authenticated users. We use the same token source we use for API calls.
+    // Important: do NOT read cookies/localStorage during the initial render,
+    // otherwise we can cause hydration mismatches (server renders "no token",
+    // client renders "token" and inserts the button).
+    const [hydrated, setHydrated] = useState(false);
+    const [authToken, setAuthToken] = useState(null);
     const [open, setOpen] = useState(false);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [pendingApproval, setPendingApproval] = useState(null);
     const aiStateRef = useRef(null);
+    const shouldRender = hydrated && Boolean(authToken);
+    // Keep token reasonably fresh in case it is set after initial render.
+    useEffect(() => {
+        setHydrated(true);
+        const refresh = () => setAuthToken(getStoredToken());
+        refresh();
+        // Listen to cross-tab updates.
+        const onStorage = (e) => {
+            if (e.key === 'hit_token')
+                refresh();
+        };
+        window.addEventListener('storage', onStorage);
+        // Poll lightly for same-tab cookie updates (login flows often write cookies without storage events).
+        const t = window.setInterval(refresh, 2000);
+        return () => {
+            window.removeEventListener('storage', onStorage);
+            window.clearInterval(t);
+        };
+    }, []);
     const initialMessages = useMemo(() => [
         {
             role: 'assistant',
@@ -89,25 +117,30 @@ export function AiOverlay(props) {
         return initialMessages;
     });
     useEffect(() => {
+        if (!shouldRender)
+            return;
         const saved = loadChatState(chatStorageKey);
         if (saved?.input && typeof saved.input === 'string')
             setInput(saved.input);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [chatStorageKey]);
+    }, [chatStorageKey, shouldRender]);
     useEffect(() => {
+        if (!shouldRender)
+            return;
         const trimmed = messages.slice(-50);
         const t = window.setTimeout(() => {
             saveChatState(chatStorageKey, { messages: trimmed, input });
         }, 150);
         return () => window.clearTimeout(t);
-    }, [chatStorageKey, input, messages]);
+    }, [chatStorageKey, input, messages, shouldRender]);
     const bottomRef = useRef(null);
     useEffect(() => {
-        if (!open)
+        if (!shouldRender || !open)
             return;
         bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }, [open, messages.length, pendingApproval]);
+    }, [open, messages.length, pendingApproval, shouldRender]);
     useEffect(() => {
+        if (!shouldRender)
+            return;
         const onKeyDown = (e) => {
             if (!e.key)
                 return;
@@ -122,7 +155,7 @@ export function AiOverlay(props) {
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, []);
+    }, [shouldRender]);
     const context = useMemo(() => ({
         pathname: props.pathname,
         routeId: props.routeId,
@@ -135,7 +168,7 @@ export function AiOverlay(props) {
         if (!pendingApproval)
             return;
         const toolName = pendingApproval.toolName;
-        const token = getStoredToken();
+        const token = authToken || getStoredToken();
         setLoading(true);
         try {
             const res = await fetch('/api/ai/execute', {
@@ -180,7 +213,7 @@ export function AiOverlay(props) {
         setMessages(nextMessages);
         setPendingApproval(null);
         try {
-            const token = getStoredToken();
+            const token = authToken || getStoredToken();
             // Agent only (single supported path)
             try {
                 const agentRes = await fetch('/api/proxy/ai/hit/ai/agent', {
@@ -263,6 +296,9 @@ export function AiOverlay(props) {
         flexDirection: 'column',
     };
     const overlayCss = `\n    .hit-ai-input::placeholder { color: var(--hit-input-placeholder, var(--hit-muted-foreground, #9ca3af)); }\n    .hit-ai-input:disabled { opacity: 0.7; cursor: not-allowed; }\n    .hit-ai-send:disabled { opacity: 0.6; cursor: not-allowed; }\n  `;
+    // If not authenticated, do not render anything (no button, no panel).
+    if (!shouldRender)
+        return null;
     return (_jsxs("div", { style: containerStyle, children: [open && (_jsxs("div", { style: panelStyle, children: [_jsx("style", { children: overlayCss }), _jsxs("div", { style: {
                             display: 'flex',
                             alignItems: 'center',
