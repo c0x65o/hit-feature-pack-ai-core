@@ -79,6 +79,19 @@ function entityBoost(q, m) {
         if (p.includes('/locations'))
             b += 8;
     }
+    // Metrics-related boosts (generic only; no metric-specific keyword heuristics)
+    if (qt.includes(' metric ') || qt.includes(' metrics ') || qt.includes(' catalog ')) {
+        if (p.includes('/metrics'))
+            b += 8;
+    }
+    if (qt.includes(' query ') || qt.includes(' aggregate ') || qt.includes(' sum ') || qt.includes(' total ') || qt.includes(' average ')) {
+        if (p.includes('/metrics/query'))
+            b += 10;
+    }
+    if (qt.includes(' compare ') || qt.includes(' comparison ') || qt.includes(' trend ') || qt.includes(' change ')) {
+        if (p.includes('/metrics/query'))
+            b += 8;
+    }
     return b;
 }
 function score(q, m) {
