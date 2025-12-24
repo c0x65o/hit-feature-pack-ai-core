@@ -49,6 +49,7 @@ type AgentResponse = {
   final_message?: string;
   pending_approval?: { toolName?: string; input?: Record<string, any> } | null;
   memory?: Record<string, any> | null;
+  debug?: Record<string, any> | null;
 };
 
 type PendingApproval = {
@@ -361,6 +362,12 @@ export function AiOverlay(props: {
             });
           }
           setMessages((prev) => [...prev, { role: 'assistant', content: agentData?.final_message || 'Done.' }]);
+          if (agentData?.debug && typeof agentData.debug === 'object') {
+            setMessages((prev) => [
+              ...prev,
+              { role: 'assistant', content: `Debug (request):\n${JSON.stringify(agentData.debug, null, 2)}` },
+            ]);
+          }
           return;
         }
       } catch {

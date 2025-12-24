@@ -7,6 +7,8 @@ export type CapabilityEndpoint = {
   summary?: string;
   methodDocs?: Record<string, string>;
   requiredBodyFields?: Record<string, string[]>;
+  bodyFields?: Record<string, string[]>;
+  queryParams?: string[];
 };
 
 export type CapabilitiesFile = {
@@ -22,6 +24,8 @@ export type MethodSpec = {
   description: string;
   pathParams: string[];
   requiredBodyFields?: string[];
+  bodyFields?: string[];
+  queryParams?: string[];
   readOnly: boolean;
 };
 
@@ -70,6 +74,8 @@ export function buildMethodCatalog(caps: CapabilitiesFile): MethodSpec[] {
       const doc = ep.methodDocs?.[m] || ep.summary || '';
       const desc = `${m} ${ep.pathTemplate}${doc ? ` — ${doc}` : ''}`.trim();
       const requiredBodyFields = Array.isArray(ep.requiredBodyFields?.[m]) ? ep.requiredBodyFields?.[m] : undefined;
+      const bodyFields = Array.isArray(ep.bodyFields?.[m]) ? ep.bodyFields?.[m] : undefined;
+      const queryParams = Array.isArray(ep.queryParams) ? ep.queryParams : undefined;
       out.push({
         name: methodNameFor(ep.pathTemplate, m),
         method: m,
@@ -77,6 +83,8 @@ export function buildMethodCatalog(caps: CapabilitiesFile): MethodSpec[] {
         description: desc,
         pathParams: extractPathParams(ep.pathTemplate),
         requiredBodyFields,
+        bodyFields,
+        queryParams,
         readOnly: m === 'GET',
       });
     }

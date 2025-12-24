@@ -4,6 +4,8 @@ export type CapabilityEndpoint = {
     summary?: string;
     methodDocs?: Record<string, string>;
     requiredBodyFields?: Record<string, string[]>;
+    bodyFields?: Record<string, string[]>;
+    queryParams?: string[];
 };
 export type CapabilitiesFile = {
     generated?: boolean;
@@ -17,6 +19,8 @@ export type MethodSpec = {
     description: string;
     pathParams: string[];
     requiredBodyFields?: string[];
+    bodyFields?: string[];
+    queryParams?: string[];
     readOnly: boolean;
 };
 export declare function methodNameFor(pathTemplate: string, method: string): string;

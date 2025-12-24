@@ -45,6 +45,8 @@ export function buildMethodCatalog(caps) {
             const doc = ep.methodDocs?.[m] || ep.summary || '';
             const desc = `${m} ${ep.pathTemplate}${doc ? ` — ${doc}` : ''}`.trim();
             const requiredBodyFields = Array.isArray(ep.requiredBodyFields?.[m]) ? ep.requiredBodyFields?.[m] : undefined;
+            const bodyFields = Array.isArray(ep.bodyFields?.[m]) ? ep.bodyFields?.[m] : undefined;
+            const queryParams = Array.isArray(ep.queryParams) ? ep.queryParams : undefined;
             out.push({
                 name: methodNameFor(ep.pathTemplate, m),
                 method: m,
@@ -52,6 +54,8 @@ export function buildMethodCatalog(caps) {
                 description: desc,
                 pathParams: extractPathParams(ep.pathTemplate),
                 requiredBodyFields,
+                bodyFields,
+                queryParams,
                 readOnly: m === 'GET',
             });
         }
