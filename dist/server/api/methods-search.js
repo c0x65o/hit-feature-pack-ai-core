@@ -92,7 +92,33 @@ function entityBoost(q, m) {
         if (p.includes('/metrics/query'))
             b += 8;
     }
+    // Prefer explicit catalog endpoints when the user says "catalog".
+    if (qt.includes(' catalog ')) {
+        if (p.includes('/catalog'))
+            b += 12;
+        if (p.includes('/definitions'))
+            b = Math.max(0, b - 6);
+    }
     return b;
+}
+function mismatchPenalty(q, m) {
+    const qt = ` ${q} `;
+    const p = (m.pathTemplate || '').toLowerCase();
+    let pen = 0;
+    // If the user clearly named an entity type, strongly prefer that entity's endpoints.
+    // This keeps selection stable when multiple entity words appear in the same prompt.
+    if ((qt.includes(' contact ') || qt.includes(' contacts ')) && !p.includes('/contacts'))
+        pen += 10;
+    if ((qt.includes(' company ') || qt.includes(' companies ') || qt.includes(' customer ') || qt.includes(' customers ')) && !p.includes('/companies'))
+        pen += 10;
+    if ((qt.includes(' activity ') || qt.includes(' activities ')) && !p.includes('/activities'))
+        pen += 8;
+    if (qt.includes(' pipeline ') && !p.includes('/pipeline'))
+        pen += 6;
+    // Metrics: "catalog" should not route to definitions/links endpoints.
+    if (qt.includes(' catalog ') && !p.includes('/catalog'))
+        pen += 10;
+    return pen;
 }
 function score(q, m) {
     const hay = normalize([m.name, m.method, m.pathTemplate, m.description, m.pathParams.join(' ')].join(' '));
@@ -112,6 +138,7 @@ function score(q, m) {
             score += 3;
     }
     score += entityBoost(q, m);
+    score -= mismatchPenalty(q, m);
     const qt = ` ${q} `;
     const mm = (m.method || '').toUpperCase();
     const isCreate = qt.includes(' add ') || qt.includes(' create ') || qt.includes(' new ') || qt.includes(' make ') || qt.includes(' log ') || qt.includes(' record ');

@@ -215,6 +215,11 @@ export function AiOverlay(props) {
     }, [shouldRender]);
     const context = useMemo(() => ({
         pathname: currentPathname,
+        // Include query params so the agent can do the right thing on pages like
+        // /dashboards?pack=projects (dashboards are pack-scoped).
+        search: typeof window !== 'undefined' ? window.location.search : null,
+        path: typeof window !== 'undefined' ? `${window.location.pathname}${window.location.search}` : currentPathname,
+        href: typeof window !== 'undefined' ? window.location.href : null,
         routeId: props.routeId,
         packName: props.packName,
         user: props.user,
