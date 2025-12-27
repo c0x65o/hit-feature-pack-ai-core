@@ -32,6 +32,34 @@ function isAuthPage(pathname) {
         normalized.startsWith(pattern + '/') ||
         normalized.startsWith(pattern + '?'));
 }
+function safeJsonStringify(value, maxLen = 4000) {
+    try {
+        const s = JSON.stringify(value, null, 2);
+        if (typeof s !== 'string')
+            return '';
+        return s.length > maxLen ? `${s.slice(0, maxLen)}\n…(truncated)…` : s;
+    }
+    catch {
+        return '';
+    }
+}
+function truncateText(text, maxLen = 1200) {
+    const s = String(text ?? '');
+    if (s.length <= maxLen)
+        return s;
+    return `${s.slice(0, maxLen)}\n…(truncated)…`;
+}
+async function readResponseBody(res) {
+    const text = await res.text().catch(() => '');
+    if (!text)
+        return { text: '', json: null };
+    try {
+        return { text, json: JSON.parse(text) };
+    }
+    catch {
+        return { text, json: null };
+    }
+}
 function summarizeHttpResult(input, data) {
     const method = String(input?.method ?? data?.method ?? '').toUpperCase();
     const path = String(input?.path ?? '');
@@ -278,7 +306,8 @@ export function AiOverlay(props) {
             const token = authToken || getStoredToken();
             // Agent only (single supported path)
             try {
-                const agentRes = await fetch('/api/proxy/ai/hit/ai/agent', {
+                const endpoint = '/api/proxy/ai/hit/ai/agent';
+                const agentRes = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -290,7 +319,8 @@ export function AiOverlay(props) {
                         history: messages.slice(-16),
                     }),
                 });
-                const agentData = (await agentRes.json().catch(() => null));
+                const body = await readResponseBody(agentRes);
+                const agentData = body.json ?? null;
                 if (agentRes.ok && agentData?.handled) {
                     if (agentData?.memory && typeof agentData.memory === 'object') {
                         aiStateRef.current = agentData.memory;
@@ -310,6 +340,32 @@ export function AiOverlay(props) {
                     }
                     return;
                 }
+                // Build a more actionable error message for debugging.
+                const statusLine = `HTTP ${agentRes.status}${agentRes.statusText ? ` ${agentRes.statusText}` : ''}`;
+                const requestId = agentData?.request_id ? String(agentData.request_id) : null;
+                const handled = agentData?.handled;
+                const serverError = agentData?.error ||
+                    agentData?.detail ||
+                    agentData?.message ||
+                    agentData?.final_message ||
+                    null;
+                const details = [];
+                details.push(`Endpoint: ${endpoint}`);
+                details.push(`Status: ${statusLine}`);
+                if (requestId)
+                    details.push(`request_id: ${requestId}`);
+                if (typeof handled !== 'undefined')
+                    details.push(`handled: ${String(handled)}`);
+                if (serverError)
+                    details.push(`error: ${String(serverError)}`);
+                // Include a small body snippet (useful when proxy returns HTML or non-JSON).
+                if (!agentData && body.text) {
+                    details.push(`response (text):\n${truncateText(body.text)}`);
+                }
+                else if (agentData?.debug) {
+                    details.push(`debug:\n${safeJsonStringify(agentData.debug)}`);
+                }
+                throw new Error(`AI agent did not handle the request.\n${details.join('\n')}`);
             }
             catch {
                 // handled below
@@ -322,7 +378,7 @@ export function AiOverlay(props) {
                 ...prev,
                 {
                     role: 'assistant',
-                    content: `I couldn't process that (${msg}).`,
+                    content: `I couldn't process that.\n\n${msg}`,
                 },
             ]);
         }

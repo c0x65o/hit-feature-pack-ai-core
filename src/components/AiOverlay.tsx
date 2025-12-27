@@ -57,6 +57,32 @@ type PendingApproval = {
   input: Record<string, any>;
 };
 
+function safeJsonStringify(value: unknown, maxLen: number = 4000): string {
+  try {
+    const s = JSON.stringify(value, null, 2);
+    if (typeof s !== 'string') return '';
+    return s.length > maxLen ? `${s.slice(0, maxLen)}\n…(truncated)…` : s;
+  } catch {
+    return '';
+  }
+}
+
+function truncateText(text: string, maxLen: number = 1200): string {
+  const s = String(text ?? '');
+  if (s.length <= maxLen) return s;
+  return `${s.slice(0, maxLen)}\n…(truncated)…`;
+}
+
+async function readResponseBody(res: Response): Promise<{ text: string; json: any | null }> {
+  const text = await res.text().catch(() => '');
+  if (!text) return { text: '', json: null };
+  try {
+    return { text, json: JSON.parse(text) };
+  } catch {
+    return { text, json: null };
+  }
+}
+
 function summarizeHttpResult(input: Record<string, any>, data: any): string {
   const method = String(input?.method ?? data?.method ?? '').toUpperCase();
   const path = String(input?.path ?? '');
@@ -337,7 +363,8 @@ export function AiOverlay(props: {
 
       // Agent only (single supported path)
       try {
-        const agentRes = await fetch('/api/proxy/ai/hit/ai/agent', {
+        const endpoint = '/api/proxy/ai/hit/ai/agent';
+        const agentRes = await fetch(endpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -349,7 +376,8 @@ export function AiOverlay(props: {
             history: messages.slice(-16),
           }),
         });
-        const agentData = (await agentRes.json().catch(() => null)) as AgentResponse | null;
+        const body = await readResponseBody(agentRes);
+        const agentData = (body.json as AgentResponse | null) ?? null;
 
         if (agentRes.ok && agentData?.handled) {
           if (agentData?.memory && typeof agentData.memory === 'object') {
@@ -370,6 +398,33 @@ export function AiOverlay(props: {
           }
           return;
         }
+
+        // Build a more actionable error message for debugging.
+        const statusLine = `HTTP ${agentRes.status}${agentRes.statusText ? ` ${agentRes.statusText}` : ''}`;
+        const requestId = (agentData as any)?.request_id ? String((agentData as any).request_id) : null;
+        const handled = (agentData as any)?.handled;
+        const serverError =
+          (agentData as any)?.error ||
+          (agentData as any)?.detail ||
+          (agentData as any)?.message ||
+          (agentData as any)?.final_message ||
+          null;
+
+        const details: string[] = [];
+        details.push(`Endpoint: ${endpoint}`);
+        details.push(`Status: ${statusLine}`);
+        if (requestId) details.push(`request_id: ${requestId}`);
+        if (typeof handled !== 'undefined') details.push(`handled: ${String(handled)}`);
+        if (serverError) details.push(`error: ${String(serverError)}`);
+
+        // Include a small body snippet (useful when proxy returns HTML or non-JSON).
+        if (!agentData && body.text) {
+          details.push(`response (text):\n${truncateText(body.text)}`);
+        } else if ((agentData as any)?.debug) {
+          details.push(`debug:\n${safeJsonStringify((agentData as any).debug)}`);
+        }
+
+        throw new Error(`AI agent did not handle the request.\n${details.join('\n')}`);
       } catch {
         // handled below
       }
@@ -380,7 +435,7 @@ export function AiOverlay(props: {
         ...prev,
         {
           role: 'assistant',
-          content: `I couldn't process that (${msg}).`,
+          content: `I couldn't process that.\n\n${msg}`,
         },
       ]);
     } finally {
