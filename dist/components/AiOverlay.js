@@ -367,10 +367,13 @@ export function AiOverlay(props) {
                 }
                 throw new Error(`AI agent did not handle the request.\n${details.join('\n')}`);
             }
-            catch {
-                // handled below
+            catch (err) {
+                // Preserve the *real* error (network error, non-JSON body, 401/403/500, etc.)
+                // so the user sees actionable debug details instead of a generic message.
+                if (err instanceof Error)
+                    throw err;
+                throw new Error('AI agent did not handle the request.');
             }
-            throw new Error('AI agent did not handle the request.');
         }
         catch (e) {
             const msg = e instanceof Error ? e.message : 'Failed to send message.';
