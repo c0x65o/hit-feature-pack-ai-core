@@ -4,16 +4,16 @@ import { z } from "zod";
 const httpRequestInputSchema = z.object({
     method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).optional().default("GET"),
     path: z.string().min(1),
-    query: z.record(z.unknown()).nullable().optional(),
-    body: z.record(z.unknown()).nullable().optional(),
+    query: z.record(z.string(), z.unknown()).nullable().optional(),
+    body: z.record(z.string(), z.unknown()).nullable().optional(),
     approved: z.boolean().optional(),
 });
 const httpBulkInputSchema = z.object({
     requests: z.array(z.object({
         method: z.string().min(1),
         path: z.string().min(1),
-        query: z.record(z.unknown()).nullable().optional(),
-        body: z.record(z.unknown()).nullable().optional(),
+        query: z.record(z.string(), z.unknown()).nullable().optional(),
+        body: z.record(z.string(), z.unknown()).nullable().optional(),
     })).min(1),
     approved: z.boolean().optional(),
 });
