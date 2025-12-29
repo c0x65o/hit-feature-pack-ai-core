@@ -83,6 +83,73 @@ function summarizeHttpResult(input, data) {
     }
     return `✅ Request completed${safeStatus ? ` (status: ${safeStatus})` : ''}.`;
 }
+function asRecord(v) {
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : null;
+}
+function extractIdLike(obj) {
+    const rec = asRecord(obj);
+    if (!rec)
+        return null;
+    const candidates = ['id', 'uuid', 'contactId', 'companyId', 'dealId', 'key'];
+    for (const k of candidates) {
+        const v = rec[k];
+        if (typeof v === 'string' && v.trim())
+            return v.trim();
+    }
+    return null;
+}
+function updateAiStateFromApproval(aiState, toolName, toolInput, execResult) {
+    const next = { ...(aiState || {}) };
+    // Always record what we approved/executed (helps follow-up reasoning).
+    next.lastApproval = {
+        at: new Date().toISOString(),
+        toolName,
+        input: toolInput,
+        result: execResult,
+    };
+    if (toolName === 'http.request') {
+        const method = String(toolInput?.method || execResult?.method || '').toUpperCase();
+        const path = String(toolInput?.path || '');
+        const status = execResult?.status;
+        const resp = execResult?.response ?? execResult;
+        next.lastHttp = { method, path, status, url: execResult?.url };
+        if (typeof status === 'number' && status >= 200 && status < 300 && method && method !== 'GET') {
+            const dataObj = asRecord(resp)?.data ?? resp;
+            const idOrKey = extractIdLike(dataObj);
+            if (idOrKey)
+                next.lastWriteId = idOrKey;
+            if (typeof (asRecord(dataObj)?.key) === 'string')
+                next.lastWriteKey = String(asRecord(dataObj)?.key);
+            // Keep a dashboard-specific alias for convenience.
+            if (path.startsWith('/api/dashboard-definitions') && typeof (asRecord(dataObj)?.key) === 'string') {
+                next.lastDashboardKey = String(asRecord(dataObj)?.key);
+            }
+            next.lastWriteMethod = method;
+            next.lastWritePath = path;
+        }
+    }
+    if (toolName === 'http.bulk') {
+        const results = Array.isArray(execResult?.results) ? execResult.results : [];
+        // Find the last successful non-GET in the batch.
+        for (let i = results.length - 1; i >= 0; i--) {
+            const r = results[i];
+            const method = String(r?.method || '').toUpperCase();
+            const status = r?.status;
+            if (method && method !== 'GET' && typeof status === 'number' && status >= 200 && status < 300) {
+                const resp = r?.response ?? r;
+                const dataObj = asRecord(resp)?.data ?? resp;
+                const idOrKey = extractIdLike(dataObj);
+                if (idOrKey)
+                    next.lastWriteId = idOrKey;
+                if (typeof (asRecord(dataObj)?.key) === 'string')
+                    next.lastWriteKey = String(asRecord(dataObj)?.key);
+                next.lastWriteMethod = method;
+                break;
+            }
+        }
+    }
+    return next;
+}
 function getStoredToken() {
     if (typeof document !== 'undefined') {
         const cookies = document.cookie.split(';');
@@ -276,6 +343,10 @@ export function AiOverlay(props) {
             if (!res.ok) {
                 throw new Error(data?.error || res.statusText);
             }
+            // IMPORTANT: Approved writes execute *outside* the agent loop.
+            // If we don't fold the execution result back into aiState, the next user turn
+            // has no reliable anchor (IDs/keys) and follow-up "oops/update it" requests become flaky.
+            aiStateRef.current = updateAiStateFromApproval(aiStateRef.current || {}, toolName, pendingApproval.input, data);
             setPendingApproval(null);
             setMessages((prev) => [
                 ...prev,
