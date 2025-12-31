@@ -1,6 +1,6 @@
 {
   "name": "@hit/feature-pack-ai-assistant",
-  "version": "1.0.34",
+  "version": "1.0.35",
   "description": "Global AI assistant overlay for HIT apps (shell-level).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -53,15 +53,15 @@
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
-    "@hit/ui-kit": "*",
+    "@hit/ui-kit": "github:c0x65o/hit-ui-kit#4237e657aed7de52c31642dd5c27d0cc4bcbc9cf",
     "next": "^15.5.9",
     "react": "^19.2.3",
-    "react-dom": "^19.0.0",
+    "react-dom": "^19.2.3",
     "zod": "^4.2.1"
   },
   "devDependencies": {
-    "@hit/ui-kit": "file:../hit-ui-kit",
-    "@types/node": "^20.0.0",
+    "@hit/ui-kit": "github:c0x65o/hit-ui-kit#4237e657aed7de52c31642dd5c27d0cc4bcbc9cf",
+    "@types/node": "^20",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "next": "^15.5.9",
