@@ -53,7 +53,7 @@
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
-    "@hit/ui-kit": "github:c0x65o/hit-ui-kit#4237e657aed7de52c31642dd5c27d0cc4bcbc9cf",
+    "@hit/ui-kit": "*",
     "next": "^15.5.9",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
