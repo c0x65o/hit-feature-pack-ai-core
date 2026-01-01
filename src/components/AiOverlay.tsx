@@ -246,6 +246,8 @@ export function AiOverlay(props: {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [lastCorrelationId, setLastCorrelationId] = useState<string | null>(null);
+  const [traceLoading, setTraceLoading] = useState(false);
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
   const aiStateRef = useRef<Record<string, any> | null>(null);
 
@@ -305,7 +307,7 @@ export function AiOverlay(props: {
     () => [
       {
         role: 'assistant',
-        content: "Hi — I'm the HIT assistant. Tell me what you want to do and I'll do it.",
+        content: "Tell me what you want to do in HIT, and I'll route it to the right agent.",
       },
     ],
     []
@@ -472,6 +474,9 @@ export function AiOverlay(props: {
         const agentData = (body.json as AgentResponse | null) ?? null;
 
         if (agentRes.ok && agentData?.reply) {
+          if (agentData?.correlationId && typeof agentData.correlationId === 'string') {
+            setLastCorrelationId(agentData.correlationId);
+          }
           setPendingApproval(null);
           setMessages((prev) => [...prev, { role: 'assistant', content: agentData.reply || 'Done.' }]);
           if (Array.isArray(agentData.pulses) && agentData.pulses.length > 0) {
@@ -535,6 +540,32 @@ export function AiOverlay(props: {
     }
   }, [context, input, loading, messages, open]);
 
+  const fetchTrace = useCallback(async () => {
+    const cid = lastCorrelationId;
+    if (!cid) return;
+    const token = authToken || getStoredToken();
+    setTraceLoading(true);
+    try {
+      const res = await fetch(`/api/proxy/ai/hit/ai/traces/${encodeURIComponent(cid)}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const body = await readResponseBody(res);
+      const obj = body.json ?? body.text ?? null;
+      const pretty = safeJsonStringify(obj) || (typeof obj === 'string' ? obj : '');
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: `Trace (${cid}):\n${pretty || '(empty)'}` },
+      ]);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to load trace.';
+      setMessages((prev) => [...prev, { role: 'assistant', content: `⚠️ ${msg}` }]);
+    } finally {
+      setTraceLoading(false);
+    }
+  }, [authToken, lastCorrelationId]);
+
   const containerStyle: React.CSSProperties = {
     position: 'fixed',
     right: 16,
@@ -597,6 +628,27 @@ export function AiOverlay(props: {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {lastCorrelationId && (
+                <button
+                  onClick={fetchTrace}
+                  disabled={traceLoading}
+                  style={{
+                    borderRadius: 10,
+                    border: '1px solid var(--hit-border, rgba(255,255,255,0.25))',
+                    background: 'transparent',
+                    color: 'inherit',
+                    cursor: traceLoading ? 'wait' : 'pointer',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    padding: '6px 10px',
+                    opacity: traceLoading ? 0.7 : 1,
+                  }}
+                  aria-label="Load trace"
+                  title={`Load trace ${lastCorrelationId}`}
+                >
+                  {traceLoading ? 'Trace…' : 'Trace'}
+                </button>
+              )}
               <button
                 onClick={() => {
                   try {
@@ -605,6 +657,7 @@ export function AiOverlay(props: {
                   setPendingApproval(null);
                   setInput('');
                   setMessages(initialMessages);
+                  setLastCorrelationId(null);
                 }}
                 style={{
                   borderRadius: 10,
