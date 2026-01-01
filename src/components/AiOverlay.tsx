@@ -45,11 +45,9 @@ type ChatMessage = {
 };
 
 type AgentResponse = {
-  handled?: boolean;
-  final_message?: string;
-  pending_approval?: { toolName?: string; input?: Record<string, any> } | null;
-  memory?: Record<string, any> | null;
-  debug?: Record<string, any> | null;
+  reply?: string;
+  correlationId?: string;
+  pulses?: Array<{ actor?: string; kind?: string; message?: string }> | null;
 };
 
 type PendingApproval = {
@@ -455,9 +453,9 @@ export function AiOverlay(props: {
     try {
       const token = authToken || getStoredToken();
 
-      // Agent only (single supported path)
+      // Nexus-first chat (single supported path)
       try {
-        const endpoint = '/api/proxy/ai/hit/ai/agent';
+        const endpoint = '/api/proxy/ai/hit/ai/chat';
         const agentRes = await fetch(endpoint, {
           method: 'POST',
           headers: {
@@ -473,42 +471,27 @@ export function AiOverlay(props: {
         const body = await readResponseBody(agentRes);
         const agentData = (body.json as AgentResponse | null) ?? null;
 
-        if (agentRes.ok && agentData?.handled) {
-          if (agentData?.memory && typeof agentData.memory === 'object') {
-            aiStateRef.current = agentData.memory;
-          }
-          if (agentData?.pending_approval?.toolName && agentData?.pending_approval?.input) {
-            setPendingApproval({
-              toolName: agentData.pending_approval.toolName,
-              input: agentData.pending_approval.input,
-            });
-          }
-          setMessages((prev) => [...prev, { role: 'assistant', content: agentData?.final_message || 'Done.' }]);
-          if (agentData?.debug && typeof agentData.debug === 'object') {
-            setMessages((prev) => [
-              ...prev,
-              { role: 'assistant', content: `Debug (request):\n${JSON.stringify(agentData.debug, null, 2)}` },
-            ]);
+        if (agentRes.ok && agentData?.reply) {
+          setPendingApproval(null);
+          setMessages((prev) => [...prev, { role: 'assistant', content: agentData.reply || 'Done.' }]);
+          if (Array.isArray(agentData.pulses) && agentData.pulses.length > 0) {
+            const pulseText = agentData.pulses
+              .map((p) => `- ${String(p.actor || 'unknown')}: ${String(p.kind || 'event')} — ${String(p.message || '')}`)
+              .join('\n');
+            setMessages((prev) => [...prev, { role: 'assistant', content: `Pulse:\n${pulseText}` }]);
           }
           return;
         }
 
         // Build a more actionable error message for debugging.
         const statusLine = `HTTP ${agentRes.status}${agentRes.statusText ? ` ${agentRes.statusText}` : ''}`;
-        const requestId = (agentData as any)?.request_id ? String((agentData as any).request_id) : null;
-        const handled = (agentData as any)?.handled;
-        const serverError =
-          (agentData as any)?.error ||
-          (agentData as any)?.detail ||
-          (agentData as any)?.message ||
-          (agentData as any)?.final_message ||
-          null;
+        const correlationId = (agentData as any)?.correlationId ? String((agentData as any).correlationId) : null;
+        const serverError = (agentData as any)?.error || (agentData as any)?.detail || (agentData as any)?.message || null;
 
         const details: string[] = [];
         details.push(`Endpoint: ${endpoint}`);
         details.push(`Status: ${statusLine}`);
-        if (requestId) details.push(`request_id: ${requestId}`);
-        if (typeof handled !== 'undefined') details.push(`handled: ${String(handled)}`);
+        if (correlationId) details.push(`correlationId: ${correlationId}`);
         if (serverError) details.push(`error: ${String(serverError)}`);
 
         // Include a small body snippet (useful when proxy returns HTML or non-JSON).
@@ -518,7 +501,7 @@ export function AiOverlay(props: {
           details.push(`debug:\n${safeJsonStringify((agentData as any).debug)}`);
         }
 
-        throw new Error(`AI agent did not handle the request.\n${details.join('\n')}`);
+        throw new Error(`AI request failed.\n${details.join('\n')}`);
       } catch (err) {
         // Preserve the *real* error (network error, non-JSON body, 401/403/500, etc.)
         // so the user sees actionable debug details instead of a generic message.
@@ -528,7 +511,7 @@ export function AiOverlay(props: {
           (typeof err === 'string' ? err : '') ||
           String(err);
         throw new Error(
-          `AI agent did not handle the request.\nEndpoint: /api/proxy/ai/hit/ai/agent\nerror: ${fallback}`
+          `AI request failed.\nEndpoint: /api/proxy/ai/hit/ai/chat\nerror: ${fallback}`
         );
       }
     } catch (e) {

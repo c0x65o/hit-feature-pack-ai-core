@@ -12,6 +12,7 @@ type MethodSpec = {
   pathParams: string[];
   readOnly: boolean;
   requiredBodyFields?: string[];
+  featurePack?: string;
 };
 
 function normalize(s: string): string {
@@ -170,6 +171,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const qRaw = (searchParams.get('q') || '').trim();
   const q = normalize(qRaw);
+  const packRaw = (searchParams.get('pack') || '').trim();
   const limitRaw = Number(searchParams.get('limit') || '12');
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(50, Math.trunc(limitRaw))) : 12;
 
@@ -180,14 +182,19 @@ export async function GET(request: NextRequest) {
   const data = await resp.json().catch(() => null);
   const methods: MethodSpec[] = Array.isArray((data as any)?.methods) ? (data as any).methods : [];
 
-  const candidates = methods
+  const filtered =
+    packRaw && packRaw.toLowerCase() !== 'all'
+      ? methods.filter((m) => String((m as any).featurePack || '').toLowerCase() === packRaw.toLowerCase())
+      : methods;
+
+  const candidates = filtered
     .map((m) => ({ m, score: score(q, m) }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map((x) => x.m);
 
-  return NextResponse.json({ query: qRaw, candidates });
+  return NextResponse.json({ query: qRaw, pack: packRaw || null, candidates });
 }
 
 
