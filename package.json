@@ -1,6 +1,6 @@
 {
   "name": "@hit/feature-pack-ai-assistant",
-  "version": "1.0.44",
+  "version": "1.0.45",
   "description": "Global AI assistant overlay for HIT apps (shell-level).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -45,6 +45,7 @@
   },
   "files": [
     "dist",
+    "src",
     "feature-pack.yaml"
   ],
   "scripts": {
