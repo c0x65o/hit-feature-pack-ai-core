@@ -1,6 +1,6 @@
 {
   "name": "@hit/feature-pack-ai-assistant",
-  "version": "1.0.45",
+  "version": "1.0.46",
   "description": "Global AI assistant overlay for HIT apps (shell-level).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -51,6 +51,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
