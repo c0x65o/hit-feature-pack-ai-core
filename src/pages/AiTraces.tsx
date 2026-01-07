@@ -104,6 +104,13 @@ export function AiTraces() {
           loading={loading}
           data={rows as any[]}
           emptyMessage="No traces yet. Traces will appear here as the AI assistant is used."
+          searchable
+          exportable
+          showColumnVisibility
+          tableId="admin.ai.traces"
+          onRefresh={refresh}
+          refreshing={loading}
+          searchDebounceMs={400}
           columns={[
             {
               key: 'createdAt',
