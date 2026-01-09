@@ -1,7 +1,7 @@
-# Feature Pack: ai-assistant
+# Feature Pack: ai-core
 # Global AI assistant overlay that can be mounted once at the shell level.
 
-name: ai-assistant
+name: ai-core
 title: HIT AI
 description: Global AI assistant overlay for HIT apps (shell-level)
 
@@ -48,31 +48,31 @@ api:
   routes:
     - path: /api/ai/endpoints
       methods: [GET]
-      handler: "@hit/feature-pack-ai-assistant/server/api/endpoints"
+      handler: "@hit/feature-pack-ai-core/server/api/endpoints"
       description: "Capabilities catalog (generated endpoints + modules)."
     - path: /api/ai/endpoints-search
       methods: [GET]
-      handler: "@hit/feature-pack-ai-assistant/server/api/endpoints-search"
+      handler: "@hit/feature-pack-ai-core/server/api/endpoints-search"
       description: "Search endpoints by natural language query."
     - path: /api/ai/methods
       methods: [GET]
-      handler: "@hit/feature-pack-ai-assistant/server/api/methods"
+      handler: "@hit/feature-pack-ai-core/server/api/methods"
       description: "LLM-friendly method catalog derived from capabilities."
     - path: /api/ai/methods-search
       methods: [GET]
-      handler: "@hit/feature-pack-ai-assistant/server/api/methods-search"
+      handler: "@hit/feature-pack-ai-core/server/api/methods-search"
       description: "Search methods by natural language query."
     - path: /api/ai/tools
       methods: [GET]
-      handler: "@hit/feature-pack-ai-assistant/server/api/tools"
+      handler: "@hit/feature-pack-ai-core/server/api/tools"
       description: "Legacy tool surface (deprecated; wraps methods)."
     - path: /api/ai/execute
       methods: [POST]
-      handler: "@hit/feature-pack-ai-assistant/server/api/execute"
+      handler: "@hit/feature-pack-ai-core/server/api/execute"
       description: "Execute an approved method (http.request/http.bulk)."
     - path: /api/proxy/ai/[...path]
       methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
-      handler: "@hit/feature-pack-ai-assistant/server/api/proxy-ai"
+      handler: "@hit/feature-pack-ai-core/server/api/proxy-ai"
       description: "Authenticated proxy override for the ai module."
 
 config:
